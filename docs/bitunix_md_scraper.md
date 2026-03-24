@@ -21,14 +21,22 @@ npx playwright install chromium
 
 ## Usage
 
-You can run the script against the pre-configured BitUnix endpoints:
+You can run the MD scraper against the pre-configured BitUnix endpoints:
 
 ```bash
-# Scrape BitUnix Futures API Docs
+# Scrape BitUnix Futures API Docs directly to MD
 node scrape_to_md.js configs/bitunix_futures_config.js
 
-# Scrape BitUnix Spot API Docs
+# Scrape BitUnix Spot API Docs directly to MD
 node scrape_to_md.js configs/bitunix_spot_config.js
+```
+
+### Local Site Downloader
+If you just want to download the raw HTML of the entire rendered documentation site (e.g., to bypass protections or view offline), you can use the downloader script:
+
+```bash
+# Download raw HTML pages to the downloaded_html folder
+node download_site.js configs/bitunix_futures_config.js
 ```
 
 ## How It Works
