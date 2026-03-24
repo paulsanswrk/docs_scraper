@@ -11,6 +11,10 @@
   "description": "",
   "dependencies": {
     "pdf-lib": "^1.17.1",
-    "puppeteer": "^24.34.0"
+    "puppeteer": "^24.34.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "turndown": "^7.2.2",
+    "turndown-plugin-gfm": "^1.0.2"
   }
 }
