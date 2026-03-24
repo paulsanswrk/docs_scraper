@@ -1,4 +1,4 @@
-const puppeteer = require('puppeteer');
+const { chromium } = require('playwright');
 const TurndownService = require('turndown');
 const { gfm } = require('turndown-plugin-gfm');
 const fsPromises = require('fs').promises;
@@ -30,33 +30,43 @@ const turndownService = new TurndownService({
 turndownService.use(gfm);
 
 (async () => {
-    console.log(`Starting ${config.name || 'Docs'} MD Scraper...`);
+    console.log(`Starting ${config.name || 'Docs'} MD Scraper using Playwright...`);
     
     // Ensure output dir exists
     await fsPromises.mkdir(OUTPUT_DIR, { recursive: true });
 
-    const browser = await puppeteer.launch({
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    // Use a desktop User-Agent to avoid generic headless bot flags
+    const browser = await chromium.launch({ headless: false }); // Optional: Make it visible to verify
+    const context = await browser.newContext({
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        viewport: { width: 1200, height: 1600 }
     });
-    const page = await browser.newPage();
+    
+    const page = await context.newPage();
 
-    await page.setViewport({ width: 1200, height: 1600 });
-    console.log('Navigating to welcome page...');
-    await page.goto(START_URL, { waitUntil: 'domcontentloaded' });
-    await new Promise(r => setTimeout(r, 5000)); // Wait for SPA render
+    console.log(`Navigating to welcome page: ${START_URL}...`);
+    // 'networkidle' helps wait for SPA routing, though it can strictly fail if connections persist
+    await page.goto(START_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    
+    // Additional wait for SPA frameworks like VitePress/MkDocs to render sidebars
+    await page.waitForTimeout(5000); 
 
     console.log('Extracting Table of Contents...');
     let toc = [];
 
     if (config.toc.rootSelector) {
         console.log(`Discovering sections via root selector: ${config.toc.rootSelector}`);
-        await page.waitForSelector(config.toc.rootSelector, { timeout: 10000 }).catch(() => console.log('Root selector not found'));
+        try {
+            await page.waitForSelector(config.toc.rootSelector, { timeout: 10000 });
+        } catch (e) {
+            console.log('Root selector not found, attempting to continue anyway...');
+        }
 
-        const rootLinks = await page.evaluate((sel, filter) => {
+        const rootLinks = await page.evaluate(({sel, filter}) => {
             return Array.from(document.querySelectorAll(sel))
                 .map(a => a.href)
                 .filter(url => url.includes(filter));
-        }, config.toc.rootSelector, URL_FILTER);
+        }, { sel: config.toc.rootSelector, filter: URL_FILTER });
 
         console.log(`Found ${rootLinks.length} root sections:`, rootLinks);
 
@@ -64,9 +74,9 @@ turndownService.use(gfm);
             console.log(`Mining section: ${sectionUrl}`);
             try {
                 await page.goto(sectionUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
-                await new Promise(r => setTimeout(r, 2000));
+                await page.waitForTimeout(2000);
                 
-                const sectionToc = await page.evaluate((tocConfig, filter) => {
+                const sectionToc = await page.evaluate(({tocConfig, filter}) => {
                     if (tocConfig.expandSelector) {
                         try {
                             document.querySelectorAll(tocConfig.expandSelector).forEach(d => {
@@ -81,7 +91,7 @@ turndownService.use(gfm);
                         title: a.innerText.trim(),
                         url: a.href,
                     })).filter(item => item.title && item.url.includes(filter));
-                }, config.toc, URL_FILTER);
+                }, { tocConfig: config.toc, filter: URL_FILTER });
 
                 toc = toc.concat(sectionToc);
             } catch (e) {
@@ -89,7 +99,7 @@ turndownService.use(gfm);
             }
         }
     } else {
-        toc = await page.evaluate((tocConfig, filter) => {
+        toc = await page.evaluate(({tocConfig, filter}) => {
             try {
                 if (tocConfig.expandSelector) {
                     document.querySelectorAll(tocConfig.expandSelector).forEach(d => {
@@ -106,7 +116,7 @@ turndownService.use(gfm);
             } catch (e) {
                 return [];
             }
-        }, config.toc, URL_FILTER);
+        }, { tocConfig: config.toc, filter: URL_FILTER });
     }
 
     console.log(`Found ${toc.length} pages total.`);
@@ -114,7 +124,8 @@ turndownService.use(gfm);
     const uniquePages = [];
     const seenUrls = new Set();
     for (const item of toc) {
-        const cleanUrl = item.url.split('#')[0]; // strip hash
+        // Strip out hash fragments to avoid duplicates of the same page
+        const cleanUrl = item.url.split('#')[0]; 
         if (!seenUrls.has(cleanUrl)) {
             seenUrls.add(cleanUrl);
             uniquePages.push({ ...item, url: cleanUrl });
@@ -131,7 +142,9 @@ turndownService.use(gfm);
 
         try {
             await page.goto(item.url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+            await page.waitForTimeout(1000); // Give JS a moment
 
+            // Robust Lazy Loading scroll down loop equivalent
             await page.evaluate(async () => {
                 const distance = 400;
                 const totalHeight = document.body.scrollHeight;
@@ -139,13 +152,12 @@ turndownService.use(gfm);
                 while (currentHeight < totalHeight) {
                     window.scrollBy(0, distance);
                     currentHeight += distance;
-                    await new Promise(r => setTimeout(r, 100));
+                    await new Promise(r => setTimeout(r, 100)); // sleep inside browser context
                 }
             });
 
-            try {
-                await page.waitForNetworkIdle({ idleTime: 500, timeout: 5000 });
-            } catch (e) {}
+            // Re-wait for any triggers to settle
+            await page.waitForTimeout(1000);
 
             const htmlContent = await page.evaluate((cleanupConfig) => {
                 if (cleanupConfig.hideSelectors) {
@@ -162,7 +174,15 @@ turndownService.use(gfm);
             
             let markdown = turndownService.turndown(htmlContent);
             
-            let parsedUrl = new URL(item.url);
+            // Generate valid filename
+            let parsedUrl;
+            try {
+                parsedUrl = new URL(item.url);
+            } catch (e) {
+                // local file:// or relative paths fallback
+                parsedUrl = { pathname: item.url };
+            }
+            
             let pathName = parsedUrl.pathname.replace(/\/$/, ""); 
             let fileName = pathName.split('/').pop() || 'index';
             

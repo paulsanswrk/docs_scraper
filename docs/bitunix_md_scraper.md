@@ -11,9 +11,10 @@ This tool is optimized for the BitUnix API documentation, which consists of two 
 The standard `scrape_docs.js` targets PDF generation. `scrape_to_md.js` uses `turndown` and `turndown-plugin-gfm` to process HTML tags directly into formatted Markdown (including tables).
 
 ## Setup
-Ensure that the markdown parser dependencies are installed:
+Ensure that the markdown parser dependencies and Playwright are installed:
 ```bash
-npm install turndown turndown-plugin-gfm
+npm install turndown turndown-plugin-gfm playwright
+npx playwright install chromium
 ```
 
 *(These have been added to the project's dependencies.)*
