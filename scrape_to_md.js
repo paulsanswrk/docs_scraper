@@ -1,7 +1,10 @@
-const { chromium } = require('playwright');
+const { chromium } = require('playwright-extra');
+const stealth = require('puppeteer-extra-plugin-stealth')();
+chromium.use(stealth);
 const TurndownService = require('turndown');
 const { gfm } = require('turndown-plugin-gfm');
 const fsPromises = require('fs').promises;
+const readline = require('readline');
 const path = require('path');
 
 // Load Config

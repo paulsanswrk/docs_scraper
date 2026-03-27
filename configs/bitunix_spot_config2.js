@@ -1,7 +1,7 @@
 module.exports = {
-    name: 'BitUnix Futures API',
-    startUrl: 'https://www.bitunix.com/api-docs/futures/common/introduction.html',
-    urlFilter: '/api-docs/futures/',
+    name: 'BitUnix Spot API 2',
+    startUrl: 'https://www.bitunix.com/api-docs/spots/en_us/common/introduction.html',
+    urlFilter: '/api-docs/spots/en_us',
     testMode: false,
     toc: {
         rootSelector: null,

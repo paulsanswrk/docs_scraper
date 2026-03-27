@@ -13,7 +13,7 @@ The standard `scrape_docs.js` targets PDF generation. `scrape_to_md.js` uses `tu
 ## Setup
 Ensure that the markdown parser dependencies and Playwright are installed:
 ```bash
-npm install turndown turndown-plugin-gfm playwright
+npm install turndown turndown-plugin-gfm playwright playwright-extra puppeteer-extra-plugin-stealth
 npx playwright install chromium
 ```
 
@@ -48,4 +48,4 @@ node download_site.js configs/bitunix_futures_config.js
 
 ## Known Limitations
 
-- **Datacenter IP Block:** BitUnix enforces strict Cloudflare protection for its APIs and Documentation against datacenter IPs (AWS, GCP, etc.). Running this script from a cloud-managed container may result in a `403 Forbidden` response. It is highly recommended to run this script locally from your own IP address or through a residential proxy.
+- **Datacenter IP Block:** BitUnix enforces strict Cloudflare protection for its APIs and Documentation against datacenter IPs (AWS, GCP, etc.). The script uses `playwright-extra` and `puppeteer-extra-plugin-stealth` to reduce bot detection, but if it still receives a `403 Forbidden` response, you may need to add a manual pause to solve the Turnstile captcha in the browser, or use a residential proxy.
